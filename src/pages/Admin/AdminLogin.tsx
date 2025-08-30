@@ -19,11 +19,12 @@ export function AdminLogin() {
     setLoading(true)
     setError('')
 
-    // Mock authentication - in real app, use Supabase
-    if (email === 'admin@asa.ma' && password === 'admin123') {
+    const { data, error } = await signIn(email, password)
+    
+    if (error) {
+      setError(error.message)
+    } else if (data) {
       navigate('/admin')
-    } else {
-      setError('Invalid email or password')
     }
     
     setLoading(false)
