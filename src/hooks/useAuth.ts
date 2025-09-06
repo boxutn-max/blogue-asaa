@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 interface User {
   id: string
@@ -15,12 +16,17 @@ export function useAuth() {
     // Check for existing session
     const savedUser = localStorage.getItem('admin_user')
     if (savedUser) {
-      setUser(JSON.parse(savedUser))
+      try {
+        setUser(JSON.parse(savedUser))
+      } catch (error) {
+        localStorage.removeItem('admin_user')
+      }
     }
     setLoading(false)
   }, [])
 
   const signIn = async (email: string, password: string) => {
+    setLoading(true)
     // Mock authentication - in real app, use Supabase
     if (email === 'admin@asa.ma' && password === 'admin123') {
       const mockUser = {
@@ -31,8 +37,10 @@ export function useAuth() {
       }
       setUser(mockUser)
       localStorage.setItem('admin_user', JSON.stringify(mockUser))
+      setLoading(false)
       return { data: mockUser, error: null }
     } else {
+      setLoading(false)
       return { data: null, error: { message: 'Invalid credentials' } }
     }
   }

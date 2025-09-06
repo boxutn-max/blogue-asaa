@@ -19,12 +19,17 @@ export function AdminLogin() {
     setLoading(true)
     setError('')
 
-    const { data, error } = await signIn(email, password)
-    
-    if (error) {
-      setError(error.message)
-    } else if (data) {
-      navigate('/admin')
+    try {
+      const { data, error } = await signIn(email, password)
+      
+      if (error) {
+        setError(error.message)
+      } else if (data) {
+        // Navigation will be handled by the App component's AdminRoutes
+        console.log('Login successful:', data)
+      }
+    } catch (err) {
+      setError('An unexpected error occurred')
     }
     
     setLoading(false)
