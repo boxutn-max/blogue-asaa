@@ -70,8 +70,7 @@ function AdminRoutes() {
   }
 
   if (!user) {
-    window.location.href = '/admin/login'
-    return null
+    return <AdminLogin />
   }
 
   return (

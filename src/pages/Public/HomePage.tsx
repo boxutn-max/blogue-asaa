@@ -1,61 +1,38 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
+import { postsAPI } from '@/lib/api'
+import type { Post } from '@/lib/supabase'
 import { Calendar, User, Eye, ArrowRight, Trophy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
-const featuredPost = {
-  id: '1',
-  title: 'ASA Wins Historic Championship Final Against Raja Casablanca',
-  excerpt: 'In a thrilling match that will be remembered for generations, ASA secured their first championship title in over a decade with a spectacular 3-2 victory.',
-  content: 'Full match report and analysis...',
-  slug: 'asa-wins-historic-championship-final',
-  featuredImage: 'https://images.pexels.com/photos/274506/pexels-photo-274506.jpeg?auto=compress&cs=tinysrgb&w=800',
-  author: 'Ahmed Benali',
-  publishedAt: '2025-01-15',
-  category: 'Match Reports',
-  views: 2847,
-  tags: ['Championship', 'Victory', 'Raja Casablanca']
-}
-
-const recentPosts = [
-  {
-    id: '2',
-    title: 'New Stadium Construction Progress Update',
-    excerpt: 'Latest developments in the construction of ASA\'s new 45,000-capacity stadium facility.',
-    slug: 'new-stadium-construction-progress',
-    featuredImage: 'https://images.pexels.com/photos/209977/pexels-photo-209977.jpeg?auto=compress&cs=tinysrgb&w=400',
-    author: 'Fatima Zahra',
-    publishedAt: '2025-01-12',
-    category: 'News',
-    views: 1234
-  },
-  {
-    id: '3',
-    title: 'Youth Academy Success Stories',
-    excerpt: 'Highlighting the remarkable achievements of our youth development program.',
-    slug: 'youth-academy-success-stories',
-    featuredImage: 'https://images.pexels.com/photos/1618200/pexels-photo-1618200.jpeg?auto=compress&cs=tinysrgb&w=400',
-    author: 'Omar Idrissi',
-    publishedAt: '2025-01-10',
-    category: 'Youth Development',
-    views: 987
-  },
-  {
-    id: '4',
-    title: 'Transfer Window Analysis: Winter 2025',
-    excerpt: 'Comprehensive analysis of ASA\'s strategic moves in the winter transfer window.',
-    slug: 'transfer-window-analysis-winter-2025',
-    featuredImage: 'https://images.pexels.com/photos/1884574/pexels-photo-1884574.jpeg?auto=compress&cs=tinysrgb&w=400',
-    author: 'Mohamed Tazi',
-    publishedAt: '2025-01-08',
-    category: 'Analysis',
-    views: 1567
-  }
-]
-
 export function HomePage() {
+  const [featuredPost, setFeaturedPost] = useState<Post | null>(null)
+  const [recentPosts, setRecentPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadPosts()
+  }, [])
+
+  const loadPosts = async () => {
+    const { data, error } = await postsAPI.getPublished({ limit: 4 })
+    
+    if (data && !error) {
+      setFeaturedPost(data[0] || null)
+      setRecentPosts(data.slice(1))
+    }
+    setLoading(false)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+      </div>
+    )
+  }
   return (
     <>
       <Helmet>
@@ -65,51 +42,55 @@ export function HomePage() {
       </Helmet>
 
       {/* Hero Section with Featured Post */}
-      <section className="relative bg-gradient-to-r from-red-600 to-red-700 text-white">
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <Badge className="mb-4 bg-white/20 text-white border-white/30">
-                {featuredPost.category}
-              </Badge>
-              <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
-                {featuredPost.title}
-              </h1>
-              <p className="text-xl mb-8 text-red-100 leading-relaxed">
-                {featuredPost.excerpt}
-              </p>
-              <div className="flex items-center space-x-6 mb-8 text-red-100">
-                <div className="flex items-center space-x-2">
-                  <User className="h-4 w-4" />
-                  <span>{featuredPost.author}</span>
+      {featuredPost && (
+        <section className="relative bg-gradient-to-r from-red-600 to-red-700 text-white">
+          <div className="absolute inset-0 bg-black/20"></div>
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+              <div>
+                <Badge className="mb-4 bg-white/20 text-white border-white/30">
+                  {featuredPost.category?.name || 'Blog'}
+                </Badge>
+                <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
+                  {featuredPost.title}
+                </h1>
+                <p className="text-xl mb-8 text-red-100 leading-relaxed">
+                  {featuredPost.excerpt}
+                </p>
+                <div className="flex items-center space-x-6 mb-8 text-red-100">
+                  <div className="flex items-center space-x-2">
+                    <User className="h-4 w-4" />
+                    <span>{featuredPost.author?.full_name || 'Unknown'}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4" />
+                    <span>{featuredPost.published_at ? new Date(featuredPost.published_at).toLocaleDateString() : ''}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Eye className="h-4 w-4" />
+                    <span>{featuredPost.view_count.toLocaleString()} views</span>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4" />
-                  <span>{featuredPost.publishedAt}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Eye className="h-4 w-4" />
-                  <span>{featuredPost.views.toLocaleString()} views</span>
-                </div>
+                <Link to={`/post/${featuredPost.slug}`}>
+                  <Button size="lg" className="bg-white text-red-600 hover:bg-gray-100">
+                    Read Full Story
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
               </div>
-              <Link to={`/post/${featuredPost.slug}`}>
-                <Button size="lg" className="bg-white text-red-600 hover:bg-gray-100">
-                  Read Full Story
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
-            <div className="relative">
-              <img
-                src={featuredPost.featuredImage}
-                alt={featuredPost.title}
-                className="rounded-lg shadow-2xl w-full h-80 object-cover"
-              />
+              <div className="relative">
+                {featuredPost.featured_image && (
+                  <img
+                    src={featuredPost.featured_image}
+                    alt={featuredPost.title}
+                    className="rounded-lg shadow-2xl w-full h-80 object-cover"
+                  />
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Recent Posts */}
       <section className="py-16 bg-gray-50">
@@ -124,14 +105,16 @@ export function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {recentPosts.map((post) => (
               <article key={post.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                <img
-                  src={post.featuredImage}
-                  alt={post.title}
-                  className="w-full h-48 object-cover"
-                />
+                {post.featured_image && (
+                  <img
+                    src={post.featured_image}
+                    alt={post.title}
+                    className="w-full h-48 object-cover"
+                  />
+                )}
                 <div className="p-6">
                   <Badge variant="secondary" className="mb-3">
-                    {post.category}
+                    {post.category?.name || 'Blog'}
                   </Badge>
                   <h3 className="text-xl font-semibold text-gray-900 mb-3 line-clamp-2">
                     <Link to={`/post/${post.slug}`} className="hover:text-red-600 transition-colors">
@@ -145,16 +128,16 @@ export function HomePage() {
                     <div className="flex items-center space-x-4">
                       <span className="flex items-center space-x-1">
                         <User className="h-3 w-3" />
-                        <span>{post.author}</span>
+                        <span>{post.author?.full_name || 'Unknown'}</span>
                       </span>
                       <span className="flex items-center space-x-1">
                         <Calendar className="h-3 w-3" />
-                        <span>{post.publishedAt}</span>
+                        <span>{post.published_at ? new Date(post.published_at).toLocaleDateString() : ''}</span>
                       </span>
                     </div>
                     <span className="flex items-center space-x-1">
                       <Eye className="h-3 w-3" />
-                      <span>{post.views}</span>
+                      <span>{post.view_count}</span>
                     </span>
                   </div>
                 </div>

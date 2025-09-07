@@ -1,59 +1,96 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { authAPI } from '@/lib/api'
+import type { Profile } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 
-interface User {
-  id: string
-  email: string
-  name: string
-  role: string
+interface AuthState {
+  user: any | null
+  profile: Profile | null
+  loading: boolean
 }
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    profile: null,
+    loading: true
+  })
 
   useEffect(() => {
-    // Check for existing session
-    const savedUser = localStorage.getItem('admin_user')
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser))
-      } catch (error) {
-        localStorage.removeItem('admin_user')
-      }
+    // Get initial session
+    const getInitialSession = async () => {
+      const { user, profile } = await authAPI.getCurrentUser()
+      setAuthState({
+        user,
+        profile,
+        loading: false
+      })
     }
-    setLoading(false)
+
+    getInitialSession()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          const { profile } = await authAPI.getCurrentUser()
+          setAuthState({
+            user: session.user,
+            profile,
+            loading: false
+          })
+        } else {
+          setAuthState({
+            user: null,
+            profile: null,
+            loading: false
+          })
+        }
+      }
+    )
+
+    return () => subscription.unsubscribe()
   }, [])
 
   const signIn = async (email: string, password: string) => {
-    setLoading(true)
-    // Mock authentication - in real app, use Supabase
-    if (email === 'admin@asa.ma' && password === 'admin123') {
-      const mockUser = {
-        id: '1',
-        email: 'admin@asa.ma',
-        name: 'Admin User',
-        role: 'admin'
-      }
-      setUser(mockUser)
-      localStorage.setItem('admin_user', JSON.stringify(mockUser))
-      setLoading(false)
-      return { data: mockUser, error: null }
-    } else {
-      setLoading(false)
-      return { data: null, error: { message: 'Invalid credentials' } }
+    setAuthState(prev => ({ ...prev, loading: true }))
+    
+    const { data, error } = await authAPI.signIn(email, password)
+    
+    if (error) {
+      setAuthState(prev => ({ ...prev, loading: false }))
+      return { data: null, error }
     }
+
+    // Get profile
+    const { profile } = await authAPI.getCurrentUser()
+    setAuthState({
+      user: data.user,
+      profile,
+      loading: false
+    })
+
+    return { data, error: null }
   }
 
   const signOut = async () => {
-    setUser(null)
-    localStorage.removeItem('admin_user')
-    return { error: null }
+    const { error } = await authAPI.signOut()
+    
+    if (!error) {
+      setAuthState({
+        user: null,
+        profile: null,
+        loading: false
+      })
+    }
+    
+    return { error }
   }
 
   return {
-    user,
-    loading,
+    user: authState.user,
+    profile: authState.profile,
+    loading: authState.loading,
     signIn,
     signOut,
   }

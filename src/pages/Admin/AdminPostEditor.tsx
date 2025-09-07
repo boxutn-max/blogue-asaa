@@ -1,5 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { postsAPI, categoriesAPI, tagsAPI } from '@/lib/api'
+import type { Post, Category, Tag } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,26 +20,104 @@ export function AdminPostEditor() {
   const navigate = useNavigate()
   const isEditing = Boolean(id)
 
+  const [loading, setLoading] = useState(false)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
   const [post, setPost] = useState({
     title: '',
     slug: '',
     content: '',
     excerpt: '',
-    featuredImage: '',
+    featured_image: '',
     status: 'draft',
-    categoryId: '',
-    tags: [],
-    metaTitle: '',
-    metaDescription: '',
-    scheduledFor: ''
+    category_id: '',
+    selectedTags: [] as string[],
+    scheduled_for: '',
+    seo_settings: {
+      meta_title: '',
+      meta_description: '',
+      keywords: ''
+    }
   })
 
-  const handleSave = () => {
-    // In real app, save to database
-    console.log('Saving post:', post)
-    navigate('/admin/posts')
+  useEffect(() => {
+    loadData()
+  }, [id])
+
+  const loadData = async () => {
+    setLoading(true)
+    
+    // Load categories and tags
+    const [categoriesResult, tagsResult] = await Promise.all([
+      categoriesAPI.getAll(),
+      tagsAPI.getAll()
+    ])
+    
+    if (categoriesResult.data) setCategories(categoriesResult.data)
+    if (tagsResult.data) setTags(tagsResult.data)
+
+    // Load post if editing
+    if (id) {
+      const { data: postData, error } = await postsAPI.getBySlug(id, true)
+      if (postData && !error) {
+        setPost({
+          title: postData.title,
+          slug: postData.slug,
+          content: postData.content,
+          excerpt: postData.excerpt || '',
+          featured_image: postData.featured_image || '',
+          status: postData.status,
+          category_id: postData.category_id || '',
+          selectedTags: postData.tags?.map(t => t.id) || [],
+          scheduled_for: postData.scheduled_for || '',
+          seo_settings: {
+            meta_title: postData.seo_settings?.meta_title || '',
+            meta_description: postData.seo_settings?.meta_description || '',
+            keywords: postData.seo_settings?.keywords || ''
+          }
+        })
+      }
+    }
+    
+    setLoading(false)
+  }
+  const handleSave = async () => {
+    setLoading(true)
+    
+    try {
+      const postData = {
+        title: post.title,
+        content: post.content,
+        excerpt: post.excerpt,
+        featured_image: post.featured_image,
+        status: post.status as 'draft' | 'published' | 'scheduled',
+        category_id: post.category_id || undefined,
+        scheduled_for: post.scheduled_for || undefined,
+        tags: post.selectedTags,
+        seo_settings: post.seo_settings
+      }
+
+      if (isEditing && id) {
+        await postsAPI.update(id, postData)
+      } else {
+        await postsAPI.create(postData)
+      }
+      
+      navigate('/admin/posts')
+    } catch (error) {
+      console.error('Error saving post:', error)
+    }
+    
+    setLoading(false)
   }
 
+  if (loading && isEditing) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+      </div>
+    )
+  }
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -60,9 +140,13 @@ export function AdminPostEditor() {
             <Eye className="mr-2 h-4 w-4" />
             Preview
           </Button>
-          <Button onClick={handleSave} className="bg-red-600 hover:bg-red-700">
+          <Button 
+            onClick={handleSave} 
+            disabled={loading}
+            className="bg-red-600 hover:bg-red-700"
+          >
             <Save className="mr-2 h-4 w-4" />
-            Save Post
+            {loading ? 'Saving...' : 'Save Post'}
           </Button>
         </div>
       </div>
@@ -160,8 +244,8 @@ export function AdminPostEditor() {
                   <label className="text-sm font-medium text-gray-700 mb-2 block">Schedule For</label>
                   <Input
                     type="datetime-local"
-                    value={post.scheduledFor}
-                    onChange={(e) => setPost({...post, scheduledFor: e.target.value})}
+                    value={post.scheduled_for}
+                    onChange={(e) => setPost({...post, scheduled_for: e.target.value})}
                   />
                 </div>
               )}
@@ -169,14 +253,16 @@ export function AdminPostEditor() {
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">Category</label>
                 <select 
-                  value={post.categoryId}
-                  onChange={(e) => setPost({...post, categoryId: e.target.value})}
+                  value={post.category_id}
+                  onChange={(e) => setPost({...post, category_id: e.target.value})}
                   className="w-full h-10 px-3 py-2 text-sm border border-gray-300 bg-white rounded-md"
                 >
                   <option value="">Select Category</option>
-                  <option value="1">Match Reports</option>
-                  <option value="2">News</option>
-                  <option value="3">Analysis</option>
+                  {categories.map(category => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
                 </select>
               </div>
             </CardContent>
@@ -196,8 +282,8 @@ export function AdminPostEditor() {
                 </div>
                 <Input
                   placeholder="Or enter image URL..."
-                  value={post.featuredImage}
-                  onChange={(e) => setPost({...post, featuredImage: e.target.value})}
+                  value={post.featured_image}
+                  onChange={(e) => setPost({...post, featured_image: e.target.value})}
                 />
               </div>
             </CardContent>
@@ -209,14 +295,34 @@ export function AdminPostEditor() {
               <CardTitle>Tags</CardTitle>
             </CardHeader>
             <CardContent>
-              <Input placeholder="Add tags separated by commas..." />
+              <div className="space-y-3">
+                {tags.map(tag => (
+                  <label key={tag.id} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={post.selectedTags.includes(tag.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPost({...post, selectedTags: [...post.selectedTags, tag.id]})
+                        } else {
+                          setPost({...post, selectedTags: post.selectedTags.filter(id => id !== tag.id)})
+                        }
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-sm">{tag.name}</span>
+                  </label>
+                ))}
+              </div>
               <div className="flex flex-wrap gap-2 mt-3">
-                <Badge variant="outline">Championship</Badge>
-                <Badge variant="outline">Victory</Badge>
-                <Badge variant="outline">
-                  <Tag className="h-3 w-3 mr-1" />
-                  Add Tag
-                </Badge>
+                {post.selectedTags.map(tagId => {
+                  const tag = tags.find(t => t.id === tagId)
+                  return tag ? (
+                    <Badge key={tagId} variant="outline">
+                      {tag.name}
+                    </Badge>
+                  ) : null
+                })}
               </div>
             </CardContent>
           </Card>
@@ -231,8 +337,11 @@ export function AdminPostEditor() {
                 <label className="text-sm font-medium text-gray-700 mb-2 block">Meta Title</label>
                 <Input
                   placeholder="SEO title..."
-                  value={post.metaTitle}
-                  onChange={(e) => setPost({...post, metaTitle: e.target.value})}
+                  value={post.seo_settings.meta_title}
+                  onChange={(e) => setPost({
+                    ...post, 
+                    seo_settings: {...post.seo_settings, meta_title: e.target.value}
+                  })}
                 />
               </div>
               <div>
@@ -241,8 +350,22 @@ export function AdminPostEditor() {
                   className="w-full p-3 border border-gray-300 rounded-md resize-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   rows={3}
                   placeholder="SEO description..."
-                  value={post.metaDescription}
-                  onChange={(e) => setPost({...post, metaDescription: e.target.value})}
+                  value={post.seo_settings.meta_description}
+                  onChange={(e) => setPost({
+                    ...post, 
+                    seo_settings: {...post.seo_settings, meta_description: e.target.value}
+                  })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Keywords</label>
+                <Input
+                  placeholder="SEO keywords..."
+                  value={post.seo_settings.keywords}
+                  onChange={(e) => setPost({
+                    ...post, 
+                    seo_settings: {...post.seo_settings, keywords: e.target.value}
+                  })}
                 />
               </div>
             </CardContent>

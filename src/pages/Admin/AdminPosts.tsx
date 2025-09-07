@@ -1,5 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { postsAPI } from '@/lib/api'
+import type { Post } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,47 +18,39 @@ import {
   MoreHorizontal
 } from 'lucide-react'
 
-const mockPosts = [
-  {
-    id: '1',
-    title: 'ASA Wins Championship Final',
-    excerpt: 'Historic victory against Raja Casablanca in a thrilling match...',
-    status: 'published',
-    author: 'Ahmed Benali',
-    category: 'Match Reports',
-    publishedAt: '2025-01-15',
-    views: 2847,
-    featuredImage: 'https://images.pexels.com/photos/274506/pexels-photo-274506.jpeg?auto=compress&cs=tinysrgb&w=100'
-  },
-  {
-    id: '2',
-    title: 'New Stadium Construction Updates',
-    excerpt: 'Latest progress on the new ASA stadium facility...',
-    status: 'draft',
-    author: 'Fatima Zahra',
-    category: 'News',
-    publishedAt: null,
-    views: 0,
-    featuredImage: 'https://images.pexels.com/photos/209977/pexels-photo-209977.jpeg?auto=compress&cs=tinysrgb&w=100'
-  },
-  {
-    id: '3',
-    title: 'Player Transfer Window Analysis',
-    excerpt: 'Comprehensive analysis of the winter transfer window...',
-    status: 'scheduled',
-    author: 'Omar Idrissi',
-    category: 'Analysis',
-    publishedAt: '2025-01-20',
-    views: 0,
-    featuredImage: 'https://images.pexels.com/photos/1884574/pexels-photo-1884574.jpeg?auto=compress&cs=tinysrgb&w=100'
-  }
-]
-
 export function AdminPosts() {
+  const [posts, setPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
 
-  const filteredPosts = mockPosts.filter(post => {
+  useEffect(() => {
+    loadPosts()
+  }, [statusFilter, searchTerm])
+
+  const loadPosts = async () => {
+    setLoading(true)
+    const { data, error } = await postsAPI.getAll({
+      status: statusFilter === 'all' ? undefined : statusFilter,
+      search: searchTerm || undefined
+    })
+    
+    if (data && !error) {
+      setPosts(data)
+    }
+    setLoading(false)
+  }
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to delete this post?')) {
+      const { error } = await postsAPI.delete(id)
+      if (!error) {
+        setPosts(posts.filter(post => post.id !== id))
+      }
+    }
+  }
+
+  const filteredPosts = posts.filter(post => {
     const matchesSearch = post.title.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === 'all' || post.status === statusFilter
     return matchesSearch && matchesStatus
@@ -75,6 +69,13 @@ export function AdminPosts() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+      </div>
+    )
+  }
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -126,11 +127,13 @@ export function AdminPosts() {
           <div className="space-y-4">
             {filteredPosts.map((post) => (
               <div key={post.id} className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                <img
-                  src={post.featuredImage}
-                  alt={post.title}
-                  className="w-16 h-16 rounded-lg object-cover"
-                />
+                {post.featured_image && (
+                  <img
+                    src={post.featured_image}
+                    alt={post.title}
+                    className="w-16 h-16 rounded-lg object-cover"
+                  />
+                )}
                 <div className="flex-1">
                   <div className="flex items-center space-x-3 mb-2">
                     <h3 className="font-semibold text-gray-900">{post.title}</h3>
@@ -140,18 +143,18 @@ export function AdminPosts() {
                   <div className="flex items-center space-x-4 text-xs text-gray-500">
                     <span className="flex items-center">
                       <User className="mr-1 h-3 w-3" />
-                      {post.author}
+                      {post.author?.full_name || 'Unknown'}
                     </span>
                     <span className="flex items-center">
                       <Calendar className="mr-1 h-3 w-3" />
-                      {post.publishedAt || 'Not published'}
+                      {post.published_at ? new Date(post.published_at).toLocaleDateString() : 'Not published'}
                     </span>
                     <span className="flex items-center">
                       <Eye className="mr-1 h-3 w-3" />
-                      {post.views} views
+                      {post.view_count} views
                     </span>
                     <span className="px-2 py-1 bg-gray-100 rounded text-xs">
-                      {post.category}
+                      {post.category?.name || 'Uncategorized'}
                     </span>
                   </div>
                 </div>
@@ -167,7 +170,12 @@ export function AdminPosts() {
                   <Button variant="ghost" size="sm">
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-red-600 hover:text-red-700"
+                    onClick={() => handleDelete(post.id)}
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
